@@ -51,26 +51,6 @@ sudo brctl addif br0 <eth0/wlan0> dtap0
 sudo ifconfig br0 up
 ```
 
-# Testing
-
-## Direct Ethernet connection
-Connect pi to pc with ethernet
-The pi should have something like `169.254.146.157/16` as ip(, assigned automatically without dhcp).
-
-Configure static ip in the same subnet for the pc and add manual arp entry for a non-existant destination
-
-```bash
-sudo ip ad add 169.254.146.158/16 dev <eno0>
-sudo arp -s 169.254.146.159 00:50:ba:85:85:ca
-```
-
-Start basic_mirror on the pi. On the pc run the iperf server and client(targeting the non-existant destination) as well
-eg:
-```bash
-iperf3 -s 169.254.146.158
-iperf3 -t 120 -c 169.254.146.159
-```
-
 ## Pi as WiFi AP
 
 [Based on this](https://www.raspberrypi.org/documentation/configuration/wireless/access-point-routed.md)
@@ -85,14 +65,14 @@ sudo systemctl unmask hostapd
 Append to `/etc/dhcpcd.conf`
 ```bash
 interface wlan0
-    static ip_address=192.168.0.1/24
+    static ip_address=192.168.4.1/24
     nohook wpa_supplicant
 ```
 ### Configure dhcp
 Replace `/etc/dnsmasq.conf` with
 ```bash
 interface=wlan0
-dhcp-range=192.168.0.2,192.168.0.20,255.255.255.0,24h
+dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 ```
 ### Configure hostapd
 Edit `/etc/hostapd/hostapd.conf`:  (fiddle with channel if needed, unfortunately the auto channel scan is not supported by the hardware)
@@ -123,7 +103,7 @@ sudo systemctl start hostapd # or enable and restart
 
 On the pc add a manual arp entry for a non-existant destination in the same subnet and run iperf with that as a destination eg
 ```bash
-sudo arp -s 192.168.0.10 00:50:ba:85:85:ca
+sudo arp -s 192.168.4.10 00:50:ba:85:85:ca
 ```
 
 # Configuration settings
@@ -131,9 +111,9 @@ sudo arp -s 192.168.0.10 00:50:ba:85:85:ca
 ## Environmental variables
 
 ```
-export P4PI=/home/pi/p4pi/t4p4s/pi
-export GRPC=/home/pi/p4pi/t4p4s/grpc
-export GRPCPP=/home/pi/p4pi/t4p4s/P4Runtime_GRPCPP
+export P4PI=/root/t4p4s/pi
+export GRPC=/root/t4p4s/grpc
+export GRPCPP=/root/t4p4s/P4Runtime_GRPCPP
 ```
 
 ## Creating veth pairs

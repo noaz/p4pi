@@ -1,25 +1,55 @@
-from django.shortcuts import render
-from .forms import LoginForm, SignUpForm
-from django.contrib.auth import authenticate, login
-from django.shortcuts import render, redirect
 import subprocess
+import json
 
+from django.http.response import JsonResponse
+from django.contrib.auth import authenticate
+from django.contrib.auth import login
+from django.contrib.auth import update_session_auth_hash
+from django.contrib import messages
+from django.shortcuts import render
+from django.shortcuts import redirect
 from django.contrib.auth.decorators import login_required
 from django.template import loader
 from django.http import HttpResponse
 from django import template
 
+from .forms import LoginForm, SignUpForm, CustomPasswordChangeForm
 from .forms import AccessPointSettingsForm
 from . import utils
 
+
 @login_required(login_url="/login")
-def index(request):
+def switch(request):
+    html_template = loader.get_template('index.html')
+    context = {'segment': 'ap', 'errors': []}
 
-    context = {}
-    context['segment'] = 'index'
+    if request.method == 'GET':
+        return HttpResponse(html_template.render(context, request))
 
-    html_template = loader.get_template( 'index.html' )
-    return HttpResponse(html_template.render(context, request))
+    if request.method == 'POST':
+        post_data = json.loads(request.body.decode("utf-8"))
+        for field in ['compiler', 'program', 'code']:
+            if field not in post_data:
+                return JsonResponse({'success': False, 'message': f'Missing {field} filed'})
+
+        examples = ['l2switch', 'calc', 'reflector', 'firewall', 'stateful', 'basic_mirror', 'arp_icmp']
+        if post_data['program'] in examples:
+            utils.set_t4p4s_switch(post_data['program'])
+            utils.restart_t4p4s_service()
+        elif post_data['program'] == 'custom':
+            utils.update_t4p4s_opts_dpdk(
+                eal_opts='-c 0x01 -n 4 --no-pci --vdev net_pcap0,iface=veth0 --vdev net_pcap1,iface=veth1',
+                cmd_opts='-p 0x0 --config "\"(0,0,0),(1,0,0)\""'
+            )
+
+            utils.update_t4p4s_examples(
+                'arch=dpdk hugepages=1024 model=v1model smem vethmode pieal piports'
+            )
+
+            utils.upload_p4_program(post_data['code'])
+        else:
+            return JsonResponse({'success': False, 'message': 'Not recognized T4P4S example'})
+    return JsonResponse({'success': True})
 
 
 @login_required(login_url="/login")
@@ -41,8 +71,7 @@ def access_point_settings(request):
                     static_ip_address=form.cleaned_data["static_ip_address"]
                 )
             except Exception:
-                context['errors'].append(
-                    'Failed to save dhcpd configuration')
+                context['errors'].append('Failed to save dhcpd configuration')
 
             if not context['errors']:
                 try:
@@ -125,3 +154,25 @@ def register_user(request):
     else:
         form = SignUpForm()
     return render(request, "accounts/register.html", {"form": form, "msg": msg, "success" : success })
+
+
+@login_required(login_url="/login")
+def password_change(request):
+    html_template = loader.get_template('accounts/password_change.html')
+    context = {'errors': []}
+
+    if request.method == 'POST':
+        form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+        context['form'] = form
+        if form.is_valid():
+            form.save()
+            update_session_auth_hash(request, form.user)
+            messages.success(
+                request,
+                'Your password has been successfully updated.'
+            )
+            return redirect("/")
+    else:
+        context['form'] = CustomPasswordChangeForm(user=request.user)
+
+    return HttpResponse(html_template.render(context, request))

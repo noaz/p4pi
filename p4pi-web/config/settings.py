@@ -22,6 +22,18 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = ['*']
 
+MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
+try:
+    from django.contrib.messages import constants as messages
+    MESSAGE_TAGS = {
+        messages.DEBUG: 'alert-info',
+        messages.INFO: 'alert-info',
+        messages.SUCCESS: 'alert-success',
+        messages.WARNING: 'alert-warning',
+        messages.ERROR: 'alert-danger',
+    }
+except Exception as e:
+    pass
 
 # Application definition
 
@@ -32,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'crispy_forms',
     'dashboard',
 ]
 
@@ -46,8 +59,8 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'config.urls'
-LOGIN_REDIRECT_URL = "home"
-LOGOUT_REDIRECT_URL = "home"
+LOGIN_REDIRECT_URL = "switch"
+LOGOUT_REDIRECT_URL = "switch"
 TEMPLATE_DIR = os.path.join(CONFIG_DIR, "dashboard/templates")
 
 TEMPLATES = [

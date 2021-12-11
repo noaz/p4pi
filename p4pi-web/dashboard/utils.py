@@ -1,8 +1,11 @@
 import re
-import pycountry
-
+import base64
+import subprocess
 from pathlib import Path
 
+import pycountry
+
+t4p4s_location = '/root/t4p4s'
 
 def update_dhcpcd_config(static_ip_address):
     dhcpcd_conf_fd = Path('/etc/dhcpcd.conf')
@@ -43,3 +46,106 @@ def get_countries():
     countries.remove(default)
     countries.insert(0, default)
     return countries
+
+
+def update_opts_dpdk_config(eal_opts, cmd_opts):
+    opts_dpdk_config_file = Path(f'{t4p4s_location}/opts_dpdk.cfg')
+    opts_dpdk_config = opts_dpdk_config_file.read_text()
+    exist = re.search(r'^uploaded_eal.*->.*$', opts_dpdk_config, flags=re.MULTILINE)
+    if exist:
+        opts_dpdk_config += f'uploaded_eal -> ealopts += {eal_opts}\n'
+    else:
+        opts_dpdk_config = re.sub(
+            r'^uploaded_eal.*->.*$',
+            f'uploaded_eal -> ealopts += {eal_opts}',
+            opts_dpdk_config,
+            flags=re.MULTILINE
+        )
+
+    exist = re.search(r'^uploaded_cmd.*->.*$', opts_dpdk_config, flags=re.MULTILINE)
+    if not exist:
+        opts_dpdk_config += f'uploaded_cmd -> cmdopts += {cmd_opts}\n'
+    else:
+        opts_dpdk_config = re.sub(
+            r'^uploaded_cmd.*->.*$',
+            f'uploaded_cmd -> cmdopts += {cmd_opts}',
+            opts_dpdk_config,
+            flags=re.MULTILINE
+        )
+    opts_dpdk_config.write_text(opts_dpdk_config)
+
+
+def update_examples_config(dpdk_opts):
+    examples_config_file = Path(f'{t4p4s_location}/examples.cfg')
+    examples_config = examples_config_file.read_text()
+    exist = re.search(r'^uploaded_switch.*$', examples_config, flags=re.MULTILINE)
+    if exist:
+        examples_config += f'uploaded_switch {dpdk_opts} uploaded_eal uploaded_cmd\n'
+    else:
+        examples_config = re.sub(
+            r'^uploaded_switch.*$',
+            f'uploaded_switch {dpdk_opts} uploaded_eal uploaded_cmd',
+            examples_config,
+            flags=re.MULTILINE
+        )
+    examples_config_file.write_text(examples_config)
+
+
+def update_t4p4s_opts_dpdk(eal_opts, cmd_opts):
+    opts_dpdk_fd = Path(f'{t4p4s_location}/opts_dpdk.cfg')
+    lines = opts_dpdk_fd.read_text()
+    exist = re.search(r'^uploaded_eal.*->.*$', lines, flags=re.MULTILINE)
+    if exist:
+        lines += f'uploaded_eal -> ealopts += {eal_opts}\n'
+    else:
+        lines = re.sub(
+            r'^uploaded_eal.*->.*$',
+            f'uploaded_eal -> ealopts += {eal_opts}',
+            lines,
+            flags=re.MULTILINE
+        )
+
+    exist = re.search(r'^uploaded_cmd.*->.*$', lines, flags=re.MULTILINE)
+    if exist:
+        lines += f'uploaded_cmd -> cmdopts += {cmd_opts}\n'
+    else:
+        lines = re.sub(
+            r'^uploaded_cmd.*->.*$',
+            f'uploaded_cmd -> cmdopts += {cmd_opts}',
+            lines,
+            flags=re.MULTILINE
+        )
+    opts_dpdk_fd.write_text(lines)
+
+
+def update_t4p4s_examples(dpdk_opts):
+    examples_fd = Path(f'{t4p4s_location}/examples.cfg')
+    lines = examples_fd.read_text()
+    exist = re.search(r'^uploaded_switch.*$', lines, flags=re.MULTILINE)
+    if exist:
+        lines = re.sub(
+            r'^uploaded_switch.*$',
+            f'uploaded_switch {dpdk_opts} uploaded_eal uploaded_cmd',
+            lines,
+            flags=re.MULTILINE
+        )
+    else:
+        lines += f'uploaded_switch {dpdk_opts} uploaded_eal uploaded_cmd\n'
+    examples_fd.write_text(lines)
+
+
+def set_t4p4s_switch(example):
+    Path('/root/t4p4s-switch').write_text(example)
+
+
+def restart_t4p4s_service():
+    try:
+        subprocess.check_call(["systemctl", "restart", "t4p4s.service"])
+    except subprocess.CalledProcessError:
+        return 'Failed to restart T4P4S service'
+
+
+def upload_p4_program(p4_code_base64):
+    Path(f'{t4p4s_location}/examples/uploaded_switch.p4').write_text(base64.b64decode(p4_code_base64))
+    set_t4p4s_switch('uploaded_switch')
+    restart_t4p4s_service()
